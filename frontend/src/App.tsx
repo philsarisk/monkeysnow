@@ -151,7 +151,7 @@ function App(): JSX.Element {
     });
 
     useEffect(() => {
-        const konamicode = new Konami("https://monkeytype.com/");
+        new Konami("https://monkeytype.com/");
     }, [])
 
     // Resort filtering hook
