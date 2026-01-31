@@ -38,7 +38,7 @@ export interface HierarchyNode {
   resortId?: string;
 }
 
-const API_URL = 'http://localhost:1234';
+const API_URL = 'https://snowscraper.camdvr.org';
 
 /**
  * Converts hierarchy data to a flat HierarchyNode tree for UI rendering.
