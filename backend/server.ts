@@ -43,7 +43,7 @@ interface LocationsMap {
 }
 
 // --- Configuration ---
-const PORT = 1234;
+const PORT = process.env.PORT || 3000;
 const UPDATE_INTERVAL_MS = 5 * 60 * 60 * 1000; // 5 Hours
 const LOCATIONS_FILE = path.join(__dirname, 'locations.json');
 
