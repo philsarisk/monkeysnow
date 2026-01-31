@@ -22,7 +22,7 @@ import {
     formatFreezingLevel
 } from './unitConversion';
 
-const API_URL = 'http://localhost:1234';
+const API_URL = 'https://snowscraper.camdvr.org';
 
 export async function fetchAllData(): Promise<AllWeatherData> {
     try {
