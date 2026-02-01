@@ -46,13 +46,6 @@ export function CompactUtilityBar({
         setViewMode(modes[nextIndex]);
     };
 
-    const cycleSort = (): void => {
-        const sorts: SortOption[] = ['temperature', 'snowfall', 'wind'];
-        const currentIndex = sorts.indexOf(selectedSort);
-        const nextIndex = (currentIndex + 1) % sorts.length;
-        setSelectedSort(sorts[nextIndex]);
-    };
-
     const getViewModeText = (): string => {
         switch (viewMode) {
             case 'default': return 'Default';
@@ -61,10 +54,17 @@ export function CompactUtilityBar({
         }
     };
 
+    const cycleSort = (): void => {
+        const sorts: SortOption[] = ['temperature', 'snowfall', 'wind'];
+        const currentIndex = sorts.indexOf(selectedSort);
+        const nextIndex = (currentIndex + 1) % sorts.length;
+        setSelectedSort(sorts[nextIndex]);
+    };
+
     const getSortText = (): string => {
         switch (selectedSort) {
-            case 'temperature': return 'Temperature';
-            case 'snowfall': return 'Snowfall';
+            case 'temperature': return 'Temp';
+            case 'snowfall': return 'Snow';
             case 'wind': return 'Wind';
         }
     };
@@ -110,17 +110,7 @@ export function CompactUtilityBar({
 
                 <span className="compact-bar-separator">|</span>
 
-                {/* Reverse Order - Toggle */}
-                <button
-                    onClick={() => setIsReversed(!isReversed)}
-                    className="compact-bar-text text-theme-textSecondary hover:text-theme-accent transition-colors"
-                >
-                    {isReversed ? '↑ Reverse' : '↓ Normal'}
-                </button>
-
-                <span className="compact-bar-separator">|</span>
-
-                {/* Sort - Cycle button */}
+                {/* Sort type - cycle button */}
                 <button
                     onClick={cycleSort}
                     className="compact-bar-text text-theme-textSecondary hover:text-theme-accent transition-colors"
@@ -130,7 +120,7 @@ export function CompactUtilityBar({
 
                 <span className="compact-bar-separator">|</span>
 
-                {/* Sort Day - Dropdown (the only dropdown) */}
+                {/* Days dropdown */}
                 <div className="relative inline-block" data-dropdown>
                     <button
                         onClick={() => setShowSortDayMenu(!showSortDayMenu)}
@@ -186,6 +176,16 @@ export function CompactUtilityBar({
                         </div>
                     )}
                 </div>
+
+                <span className="compact-bar-separator">|</span>
+
+                {/* Order Toggle */}
+                <button
+                    onClick={() => setIsReversed(!isReversed)}
+                    className="compact-bar-text text-theme-textSecondary hover:text-theme-accent transition-colors"
+                >
+                    {isReversed ? 'Descending' : 'Ascending'}
+                </button>
             </div>
         </div>
     );

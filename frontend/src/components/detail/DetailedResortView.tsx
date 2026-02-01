@@ -14,6 +14,7 @@ import type { UnitSystem } from '../../types';
 interface DetailedResortViewPropsWithUnits extends DetailedResortViewProps {
     unitSystem: UnitSystem;
     showUtilityBar: boolean;
+    onBack: () => void;
 }
 
 // Default aggregation colors
@@ -32,6 +33,7 @@ export function DetailedResortView({
     location,
     unitSystem,
     showUtilityBar,
+    onBack,
 }: DetailedResortViewPropsWithUnits): JSX.Element {
     // State for selected models
     const [selectedModels, setSelectedModels] = useLocalStorage<WeatherModel[]>(
@@ -241,6 +243,7 @@ export function DetailedResortView({
             {showUtilityBar && (
                 <div className="px-4 sm:px-6 md:px-8 max-w-7xl mx-auto">
                     <DetailUtilityBar
+                        onBack={onBack}
                         selectedModels={selectedModels}
                         setSelectedModels={setSelectedModels}
                         selectedVariables={selectedVariables}

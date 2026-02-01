@@ -411,16 +411,6 @@ export const ResortSelectionGridModal = memo(function ResortSelectionGridModal({
     });
   }, []);
 
-  // Expand all nodes
-  const handleExpandAll = useCallback(() => {
-    setExpandedNodes(new Set(allNodeIds));
-  }, [allNodeIds]);
-
-  // Collapse all nodes
-  const handleCollapseAll = useCallback(() => {
-    setExpandedNodes(new Set());
-  }, []);
-
   // Auto-focus input on open
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -468,9 +458,6 @@ export const ResortSelectionGridModal = memo(function ResortSelectionGridModal({
     }
   };
 
-  // Check if all nodes are expanded
-  const allExpanded = expandedNodes.size === allNodeIds.size;
-
   return (
     <div className="command-palette-backdrop" onClick={handleBackdropClick}>
       <div className="command-palette resort-grid-modal">
@@ -488,14 +475,13 @@ export const ResortSelectionGridModal = memo(function ResortSelectionGridModal({
               spellCheck={false}
             />
           </div>
-          <div className="resort-grid-actions">
-            <button
-              className="resort-grid-action-btn"
-              onClick={allExpanded ? handleCollapseAll : handleExpandAll}
-            >
-              {allExpanded ? 'Collapse All' : 'Expand All'}
-            </button>
-          </div>
+          <button
+            className="resort-grid-close-btn"
+            onClick={closeModal}
+            aria-label="Close"
+          >
+            <Icon icon={icons.close} />
+          </button>
         </div>
 
         {/* Grid content */}

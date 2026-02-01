@@ -8,6 +8,7 @@ import {
   faMinus,
   faChevronRight,
   faChevronDown,
+  faChevronLeft,
   faCaretRight,
   faCaretDown,
   // Command palette - main menu
@@ -51,6 +52,8 @@ import {
   faHouse,
   faCircleInfo,
   faGear,
+  // Modal controls
+  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
 // Re-export for direct usage
@@ -74,6 +77,7 @@ export const icons = {
   // Navigation
   chevronRight: faChevronRight,
   chevronDown: faChevronDown,
+  chevronLeft: faChevronLeft,
   caretRight: faCaretRight,
   caretDown: faCaretDown,
 
@@ -131,6 +135,9 @@ export const icons = {
   home: faHouse,
   info: faCircleInfo,
   settings: faGear,
+
+  // Modal controls
+  close: faXmark,
 } as const;
 
 export type IconKey = keyof typeof icons;
