@@ -290,7 +290,7 @@ export function generateSnowfallEstimateCommands(
     },
     {
       id: 'snowfall-totalprecip',
-      name: 'Estimate Using Total Precip',
+      name: 'monkeysnow estimate',
       icon: selectedMode === 'totalPrecip' ? icons.check : undefined,
       action: () => setSelectedMode('totalPrecip'),
     },
