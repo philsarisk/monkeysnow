@@ -34,6 +34,7 @@ import {
   faSquare,
   faCalendarDays,
   faLink,
+  faCloud,
   // Theme icons
   faMoon,
   faSun,
@@ -105,6 +106,8 @@ export const icons = {
   borders: faSquare,
   date: faCalendarDays,
   link: faLink,
+
+  weatherModel: faCloud,
 
   // Theme sub-icons
   dark: faMoon,

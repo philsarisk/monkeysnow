@@ -54,6 +54,7 @@ import type {
     ViewMode,
     TemperatureMetric,
     SnowfallEstimateMode,
+    WeatherModelSetting,
     UtilityBarStyle
 } from './types';
 
@@ -142,6 +143,7 @@ function App(): JSX.Element {
     const [viewMode, setViewMode] = useLocalStorage<ViewMode>('viewMode', 'default');
     const [selectedTemperatureMetric, setSelectedTemperatureMetric] = useLocalStorage<TemperatureMetric>('temperatureMetric', defaultTemperatureMetric);
     const [snowfallEstimateMode, setSnowfallEstimateMode] = useLocalStorage<SnowfallEstimateMode>('snowfallEstimateMode', 'model');
+    const [weatherModel, setWeatherModel] = useLocalStorage<WeatherModelSetting>('weatherModel', 'auto');
     const [chartZoomSyncEnabled, setChartZoomSyncEnabled] = useLocalStorage<boolean>('chartZoomSync', true);
     const [unitSystem, setUnitSystem] = useUnitSystem();
 
@@ -209,6 +211,7 @@ function App(): JSX.Element {
         viewMode, setViewMode,
         selectedTemperatureMetric, setSelectedTemperatureMetric,
         snowfallEstimateMode, setSnowfallEstimateMode,
+        weatherModel, setWeatherModel,
         showUtilityBar, setShowUtilityBar,
         utilityBarStyle, setUtilityBarStyle,
         unitSystem, setUnitSystem,
@@ -395,6 +398,8 @@ function App(): JSX.Element {
             setSelectedTemperatureMetric,
             snowfallEstimateMode,
             setSnowfallEstimateMode,
+            weatherModel,
+            setWeatherModel,
             showUtilityBar,
             setShowUtilityBar,
             utilityBarStyle,

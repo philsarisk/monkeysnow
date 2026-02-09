@@ -45,6 +45,8 @@ interface LocationsMap {
 // --- Configuration ---
 const PORT = process.env.PORT || 3000;
 const UPDATE_INTERVAL_MS = 5 * 60 * 60 * 1000; // 5 Hours
+const BATCH_SIZE = 30; // Max resorts per Open-Meteo API call (30 resorts = 90 elevation points)
+const BATCH_DELAY_MS = 60 * 1000; // Delay between API batches to respect rate limits (1 min)
 const LOCATIONS_FILE = path.join(__dirname, 'locations.json');
 
 // --- Global State ---
@@ -57,6 +59,14 @@ const app = express();
 app.use(cors());
 
 // --- Helpers ---
+
+function chunk<T>(arr: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+}
 
 /**
  * Converts a name to a URL-friendly slug ID.
@@ -346,52 +356,103 @@ const updateWeatherData = async () => {
 
     const url = "https://api.open-meteo.com/v1/forecast";
 
-    // 2. Fetch data for each country with appropriate model
+    // 2. Fetch data for each country with appropriate model, batched to avoid API limits
     const countryResponses: Record<string, { main: any[], freezing: any[] }> = {};
 
+    let isFirstBatch = true;
     for (const country of countries) {
         const batch = countryBatches[country];
         const model = COUNTRY_MODELS[country] || DEFAULT_MODEL;
+        const resortChunks = chunk(
+            batch.resortNames.map((name, idx) => idx),
+            BATCH_SIZE
+        );
+        const totalChunks = resortChunks.length;
 
-        console.log(`Fetching data for ${country} (${batch.resortNames.length} resorts) using model: ${model}...`);
+        console.log(`Fetching data for ${country} (${batch.resortNames.length} resorts, ${totalChunks} batch${totalChunks > 1 ? 'es' : ''}) using model: ${model}...`);
 
-        // Main data call
-        const mainParams = {
-            latitude: batch.mainLats,
-            longitude: batch.mainLons,
-            elevation: batch.mainElevs,
-            hourly: [
-                "wind_speed_10m",       // 0
-                "wind_direction_10m",   // 1
-                "temperature_2m",       // 2
-                "relative_humidity_2m", // 3
-                "precipitation",        // 4
-                "weather_code",         // 5
-                "surface_pressure",     // 6
-                "rain",                 // 7
-                "snowfall"              // 8
-            ],
-            models: model,
-            forecast_days: 10,
-            timezone: "auto"
-        };
+        // Accumulate responses across chunks
+        const accMain: any[] = [];
+        const accFreezing: any[] = [];
 
-        // Freezing levels call
-        const freezingParams = {
-            latitude: batch.freezingLats,
-            longitude: batch.freezingLons,
-            models: 'gfs_seamless',
-            hourly: ["freezing_level_height"],
-            forecast_days: 10,
-            timezone: "auto"
-        };
+        for (let chunkIdx = 0; chunkIdx < resortChunks.length; chunkIdx++) {
+            const indices = resortChunks[chunkIdx];
+            const chunkSize = indices.length;
 
-        const mainResponses = await fetchWeatherApi(url, mainParams);
-        const freezingResponses = await fetchWeatherApi(url, freezingParams);
+            // Wait between API calls to respect Open-Meteo's per-minute rate limit
+            if (!isFirstBatch) {
+                console.log(`  Waiting ${BATCH_DELAY_MS / 1000}s before next chunk...`);
+                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+            }
+            isFirstBatch = false;
+
+            console.log(`  Fetching ${country} chunk ${chunkIdx + 1}/${totalChunks} (${chunkSize} resorts)...`);
+
+            // Build params for this chunk only
+            const chunkMainLats: number[] = [];
+            const chunkMainLons: number[] = [];
+            const chunkMainElevs: number[] = [];
+            const chunkFreezingLats: number[] = [];
+            const chunkFreezingLons: number[] = [];
+
+            for (const i of indices) {
+                // Main data: 3 points per resort (Bot, Mid, Top)
+                const mainBase = i * 3;
+                chunkMainLats.push(batch.mainLats[mainBase], batch.mainLats[mainBase + 1], batch.mainLats[mainBase + 2]);
+                chunkMainLons.push(batch.mainLons[mainBase], batch.mainLons[mainBase + 1], batch.mainLons[mainBase + 2]);
+                chunkMainElevs.push(batch.mainElevs[mainBase], batch.mainElevs[mainBase + 1], batch.mainElevs[mainBase + 2]);
+                // Freezing: 1 point per resort
+                chunkFreezingLats.push(batch.freezingLats[i]);
+                chunkFreezingLons.push(batch.freezingLons[i]);
+            }
+
+            const mainParams = {
+                latitude: chunkMainLats,
+                longitude: chunkMainLons,
+                elevation: chunkMainElevs,
+                hourly: [
+                    "wind_speed_10m",       // 0
+                    "wind_direction_10m",   // 1
+                    "temperature_2m",       // 2
+                    "relative_humidity_2m", // 3
+                    "precipitation",        // 4
+                    "weather_code",         // 5
+                    "surface_pressure",     // 6
+                    "rain",                 // 7
+                    "snowfall"              // 8
+                ],
+                models: model,
+                forecast_days: 10,
+                timezone: "auto"
+            };
+
+            const freezingParams = {
+                latitude: chunkFreezingLats,
+                longitude: chunkFreezingLons,
+                models: 'gfs_seamless',
+                hourly: ["freezing_level_height"],
+                forecast_days: 10,
+                timezone: "auto"
+            };
+
+            try {
+                const mainResponses = await fetchWeatherApi(url, mainParams);
+                const freezingResponses = await fetchWeatherApi(url, freezingParams);
+                accMain.push(...mainResponses);
+                accFreezing.push(...freezingResponses);
+            } catch (error) {
+                console.error(`  Failed to fetch batch for ${country} chunk ${chunkIdx + 1}/${totalChunks}:`, error);
+                // Push nulls so indices stay aligned for resorts in this chunk
+                for (let j = 0; j < chunkSize; j++) {
+                    accMain.push(null, null, null); // 3 per resort (bot, mid, top)
+                    accFreezing.push(null); // 1 per resort
+                }
+            }
+        }
 
         countryResponses[country] = {
-            main: mainResponses,
-            freezing: freezingResponses
+            main: accMain,
+            freezing: accFreezing
         };
     }
 
@@ -403,6 +464,10 @@ const updateWeatherData = async () => {
         mainResp: any,
         freezingResp: any
     ) => {
+        if (!mainResp || !mainResp.hourly()) {
+            console.warn('Skipping location: missing response or hourly data');
+            return null;
+        }
         const utcOffset = mainResp.utcOffsetSeconds();
         const hourly = mainResp.hourly()!;
 
@@ -569,46 +634,64 @@ const updateWeatherData = async () => {
 
         for (let i = 0; i < batch.resortNames.length; i++) {
             const resortName = batch.resortNames[i];
-            const resortData = locations[resortName];
-            const [lat, lon] = resortData.loc!;
+            try {
+                const resortData = locations[resortName];
+                const [lat, lon] = resortData.loc!;
 
-            // Freezing response: 1 per resort
-            const freezingResp = responses.freezing[i];
+                // Freezing response: 1 per resort
+                const freezingResp = responses.freezing[i];
 
-            // Main responses: 3 per resort (Bot, Mid, Top)
-            const idxBot = i * 3;
-            const idxMid = i * 3 + 1;
-            const idxTop = i * 3 + 2;
+                // Main responses: 3 per resort (Bot, Mid, Top)
+                const idxBot = i * 3;
+                const idxMid = i * 3 + 1;
+                const idxTop = i * 3 + 2;
 
-            const respBot = responses.main[idxBot];
-            const respMid = responses.main[idxMid];
-            const respTop = responses.main[idxTop];
+                const respBot = responses.main[idxBot];
+                const respMid = responses.main[idxMid];
+                const respTop = responses.main[idxTop];
 
-            // Process each level
-            const forecastBot = processLocation(respBot, freezingResp);
-            const forecastMid = processLocation(respMid, freezingResp);
-            const forecastTop = processLocation(respTop, freezingResp);
+                // Process each level
+                const forecastBot = processLocation(respBot, freezingResp);
+                const forecastMid = processLocation(respMid, freezingResp);
+                const forecastTop = processLocation(respTop, freezingResp);
 
-            structuredData[resortName] = {
-                bot: {
-                    metadata: { elevation: resortData.bot, lat, lon },
-                    forecast: forecastBot
-                },
-                mid: {
-                    metadata: { elevation: resortData.mid, lat, lon },
-                    forecast: forecastMid
-                },
-                top: {
-                    metadata: { elevation: resortData.top, lat, lon },
-                    forecast: forecastTop
+                if (!forecastBot || !forecastMid || !forecastTop) {
+                    console.warn(`Incomplete data for ${resortName}, skipping resort`);
+                    continue;
                 }
-            };
+
+                structuredData[resortName] = {
+                    bot: {
+                        metadata: { elevation: resortData.bot, lat, lon },
+                        forecast: forecastBot
+                    },
+                    mid: {
+                        metadata: { elevation: resortData.mid, lat, lon },
+                        forecast: forecastMid
+                    },
+                    top: {
+                        metadata: { elevation: resortData.top, lat, lon },
+                        forecast: forecastTop
+                    }
+                };
+            } catch (error) {
+                console.error(`Error processing ${resortName}:`, error);
+                continue;
+            }
         }
     }
 
-    weatherCache = structuredData;
+    // Merge new data into existing cache (preserve data from previous successful updates)
+    if (weatherCache && Object.keys(structuredData).length > 0) {
+        weatherCache = { ...weatherCache, ...structuredData };
+    } else if (Object.keys(structuredData).length > 0) {
+        weatherCache = structuredData;
+    }
+    // If structuredData is empty, keep the existing cache as-is
+
     lastSuccessfulUpdate = new Date();
-    console.log(`[${lastSuccessfulUpdate.toISOString()}] Weather update complete.`);
+    const resortCount = Object.keys(structuredData).length;
+    console.log(`[${lastSuccessfulUpdate.toISOString()}] Weather update complete. Updated ${resortCount} resorts.`);
 };
 
 // --- Routes/Start ---
