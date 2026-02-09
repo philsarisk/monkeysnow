@@ -10,6 +10,7 @@ import {
     faEnvelope,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
+import { useGitHubContributors } from '../hooks/useGitHubContributors';
 
 interface SectionProps {
     title: string;
@@ -52,6 +53,8 @@ function Subsection({ title, icon, children }: SubsectionProps): JSX.Element {
 }
 
 export function AboutPage(): JSX.Element {
+    const { contributors, loading, error } = useGitHubContributors();
+
     return (
         <div className="about-page">
 
@@ -126,6 +129,27 @@ export function AboutPage(): JSX.Element {
                     The command palette supports fuzzy search - just start typing to filter commands.
                     Use arrow keys to navigate and <kbd>Enter</kbd> to select.
                 </p>
+            </Section>
+
+            {/* Contributors Section */}
+            <Section title="contributors" icon={faCodeBranch}>
+                {loading && <p>loading contributors...</p>}
+                {error && <p>failed to load contributors.</p>}
+                {!loading && !error && contributors.length > 0 && (
+                    <div className="about-contributors-grid">
+                        {contributors.map((username) => (
+                            <a
+                                key={username}
+                                href={`https://github.com/${username}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="about-link"
+                            >
+                                {username}
+                            </a>
+                        ))}
+                    </div>
+                )}
             </Section>
 
             {/* Data Sources Section */}
