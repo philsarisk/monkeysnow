@@ -1,4 +1,4 @@
-import { useRef, useState, MouseEvent } from 'react';
+import { useRef, useState, useEffect, useCallback, MouseEvent } from 'react';
 import { webcamUrls } from '../../utils/constants';
 import { calculateDayStats, formatWeatherText, getTemperatureStyle, getSnowClass, getWindClass } from './cardUtils';
 import { formatTemp, formatSnow, formatWind } from '../../utils/unitConversion';
@@ -7,6 +7,29 @@ import type { CardProps } from '../../types';
 export function CompactCard({ resort, temperatureMetric = 'max', showDate = false, unitSystem = 'metric', onResortClick }: CardProps): JSX.Element {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [seymourClicks, setSeymourClicks] = useState(0);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
+    const updateScrollState = useCallback(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        const tolerance = 1;
+        setCanScrollLeft(el.scrollLeft > tolerance);
+        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - tolerance);
+    }, []);
+
+    useEffect(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        updateScrollState();
+        el.addEventListener('scroll', updateScrollState);
+        const observer = new ResizeObserver(updateScrollState);
+        observer.observe(el);
+        return () => {
+            el.removeEventListener('scroll', updateScrollState);
+            observer.disconnect();
+        };
+    }, [updateScrollState]);
 
     const webcamUrl = webcamUrls[resort.name];
 
@@ -66,7 +89,7 @@ export function CompactCard({ resort, temperatureMetric = 'max', showDate = fals
             <div className="relative">
                 <button
                     onClick={(e) => { e.stopPropagation(); scrollLeft(); }}
-                    className="absolute left-0.5 top-1/2 -translate-y-1/2 z-10 bg-theme-cardBg rounded-full p-1 shadow-md hover:bg-theme-secondary transition-all text-theme-textPrimary opacity-70 hover:opacity-100"
+                    className={`absolute left-0.5 top-1/2 -translate-y-1/2 z-10 bg-theme-cardBg rounded-full p-1 shadow-md hover:bg-theme-secondary transition-all duration-300 text-theme-textPrimary ${canScrollLeft ? 'opacity-70 hover:opacity-100' : 'opacity-0 pointer-events-none'}`}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-3 h-3">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -74,7 +97,7 @@ export function CompactCard({ resort, temperatureMetric = 'max', showDate = fals
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); scrollRight(); }}
-                    className="absolute right-0.5 top-1/2 -translate-y-1/2 z-10 bg-theme-cardBg rounded-full p-1 shadow-md hover:bg-theme-secondary transition-all text-theme-textPrimary opacity-70 hover:opacity-100"
+                    className={`absolute right-0.5 top-1/2 -translate-y-1/2 z-10 bg-theme-cardBg rounded-full p-1 shadow-md hover:bg-theme-secondary transition-all duration-300 text-theme-textPrimary ${canScrollRight ? 'opacity-70 hover:opacity-100' : 'opacity-0 pointer-events-none'}`}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-3 h-3">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />

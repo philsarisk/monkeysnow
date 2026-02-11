@@ -5,7 +5,7 @@
  * This hook now gets hierarchy data from the HierarchyContext (fetched from backend).
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useHierarchy, type HierarchyNode } from '../contexts/HierarchyContext';
 import { useResortCache } from './useResortCache';
 
@@ -32,6 +32,7 @@ export interface UseResortHierarchyReturn {
   toggleResort: (resortId: string) => void;
   selectAllInNode: (node: HierarchyNode) => void;
   deselectAllInNode: (node: HierarchyNode) => void;
+  clearAllResorts: () => void;
   getSelectionState: (node: HierarchyNode) => 'all' | 'some' | 'none';
   getResortsUnderNode: (node: HierarchyNode) => string[];
 
@@ -83,14 +84,22 @@ export function useResortHierarchy({
   // Get hierarchy from context (fetched from backend)
   const { hierarchyTree, loading: isLoading } = useHierarchy();
 
+  // Modal state
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Draft selection state - only committed on modal close to avoid lag
+  const [draftSelectedResorts, setDraftSelectedResorts] = useState<string[]>(selectedResorts);
+  const draftRef = useRef(draftSelectedResorts);
+  draftRef.current = draftSelectedResorts;
+
+  // Use draft state when modal is open, committed state when closed
+  const activeSelectedResorts = isOpen ? draftSelectedResorts : selectedResorts;
+
   // Initialize resort cache for performance (O(1) lookups instead of tree traversals)
   const {
     getResortsUnderNode: cachedGetResortsUnderNode,
     getSelectionState: cachedGetSelectionState,
-  } = useResortCache({ hierarchyTree, selectedResorts });
-
-  // Modal state
-  const [isOpen, setIsOpen] = useState(false);
+  } = useResortCache({ hierarchyTree, selectedResorts: activeSelectedResorts });
 
   // Navigation state - stack of parent nodes
   const [navigationStack, setNavigationStack] = useState<HierarchyNode[]>([]);
@@ -136,25 +145,28 @@ export function useResortHierarchy({
 
   // Open/close modal
   const openModal = useCallback(() => {
+    setDraftSelectedResorts(selectedResorts);
     setIsOpen(true);
     setNavigationStack([]);
     setSearchTerm('');
     setSelectedIndex(0);
-  }, []);
+  }, [selectedResorts]);
 
   const closeModal = useCallback(() => {
+    // Commit draft selection to parent state on close
+    onResortsChange(draftRef.current);
     setIsOpen(false);
     setNavigationStack([]);
     setSearchTerm('');
     setSelectedIndex(0);
-  }, []);
+  }, [onResortsChange]);
 
   // Navigation
   const navigateTo = useCallback((node: HierarchyNode) => {
     if (node.type === 'resort') {
-      // Toggle selection for resorts
+      // Toggle selection for resorts (draft state only)
       if (node.resortId) {
-        onResortsChange((prev) =>
+        setDraftSelectedResorts((prev) =>
           prev.includes(node.resortId!)
             ? prev.filter((id) => id !== node.resortId)
             : [...prev, node.resortId!]
@@ -166,7 +178,7 @@ export function useResortHierarchy({
       setSearchTerm('');
       setSelectedIndex(0);
     }
-  }, [onResortsChange]);
+  }, []);
 
   const goBack = useCallback(() => {
     if (isSearchMode) {
@@ -182,31 +194,35 @@ export function useResortHierarchy({
 
   const canGoBack = navigationStack.length > 0 || isSearchMode;
 
-  // Selection helpers
+  // Selection helpers - operate on draft state only
   const toggleResort = useCallback((resortId: string) => {
-    onResortsChange((prev) =>
+    setDraftSelectedResorts((prev) =>
       prev.includes(resortId)
         ? prev.filter((id) => id !== resortId)
         : [...prev, resortId]
     );
-  }, [onResortsChange]);
+  }, []);
 
   const selectAllInNode = useCallback((node: HierarchyNode) => {
     const resortIds = cachedGetResortsUnderNode(node);
-    onResortsChange((prev) => {
+    setDraftSelectedResorts((prev) => {
       const newSet = new Set(prev);
       for (const id of resortIds) {
         newSet.add(id);
       }
       return Array.from(newSet);
     });
-  }, [onResortsChange, cachedGetResortsUnderNode]);
+  }, [cachedGetResortsUnderNode]);
 
   const deselectAllInNode = useCallback((node: HierarchyNode) => {
     const resortIds = cachedGetResortsUnderNode(node);
     const resortIdSet = new Set(resortIds);
-    onResortsChange((prev) => prev.filter((id) => !resortIdSet.has(id)));
-  }, [onResortsChange, cachedGetResortsUnderNode]);
+    setDraftSelectedResorts((prev) => prev.filter((id) => !resortIdSet.has(id)));
+  }, [cachedGetResortsUnderNode]);
+
+  const clearAllResorts = useCallback(() => {
+    setDraftSelectedResorts([]);
+  }, []);
 
   // Use cached version for O(1) lookups
   const getSelectionState = cachedGetSelectionState;
@@ -279,11 +295,12 @@ export function useResortHierarchy({
     goBack,
     canGoBack,
 
-    // Selection
-    selectedResorts,
+    // Selection (draft state when modal is open, committed state when closed)
+    selectedResorts: activeSelectedResorts,
     toggleResort,
     selectAllInNode,
     deselectAllInNode,
+    clearAllResorts,
     getSelectionState,
     getResortsUnderNode: cachedGetResortsUnderNode,
 
