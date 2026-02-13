@@ -1,10 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import { themes, getThemeById, getDefaultTheme } from '../types/themes';
 import type { Theme } from '../types/themes';
 import type { UseThemeReturn } from '../types';
 
 export function useTheme(): UseThemeReturn {
-    const [theme, setThemeState] = useState<Theme>(getDefaultTheme());
+    const [theme, setThemeState] = useState<Theme>(() => {
+        try {
+            const savedId = localStorage.getItem('themeId');
+            if (savedId) {
+                const saved = getThemeById(savedId);
+                if (saved) return saved;
+            }
+        } catch { /* ignore */ }
+        return getDefaultTheme();
+    });
     const [isInitialized, setIsInitialized] = useState(false);
 
     // Apply theme CSS variables to document
@@ -35,25 +44,9 @@ export function useTheme(): UseThemeReturn {
         }
     }, []);
 
-    // Initialize theme on mount
-    useEffect(() => {
-        try {
-            const savedThemeId = localStorage.getItem('themeId');
-            if (savedThemeId) {
-                const savedTheme = getThemeById(savedThemeId);
-                if (savedTheme) {
-                    setThemeState(savedTheme);
-                    applyTheme(savedTheme);
-                } else {
-                    applyTheme(getDefaultTheme());
-                }
-            } else {
-                applyTheme(getDefaultTheme());
-            }
-        } catch (error) {
-            console.warn('Error accessing localStorage:', error);
-            applyTheme(getDefaultTheme());
-        }
+    // Apply theme CSS before first paint (theme already loaded in useState init)
+    useLayoutEffect(() => {
+        applyTheme(theme);
         setIsInitialized(true);
     }, [applyTheme]);
 

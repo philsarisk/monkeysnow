@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { fetchWeatherApi } from 'openmeteo';
 import fs from 'fs';
 import path from 'path';
@@ -57,6 +58,8 @@ const app = express();
 
 // Enable CORS for all origins (for local development)
 app.use(cors());
+// Enable gzip compression for all responses
+app.use(compression());
 // Enable JSON body parsing for POST requests
 app.use(express.json());
 
