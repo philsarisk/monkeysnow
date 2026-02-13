@@ -125,7 +125,10 @@ function App(): JSX.Element {
     const { skiResorts, getDisplayName, loading: hierarchyLoading } = useHierarchy();
 
     // Weather data hook
-    const { allWeatherData, error, createLoadingController, cancelLoading } = useWeatherData();
+    const { allWeatherData, loading: weatherLoading, error, createLoadingController, cancelLoading } = useWeatherData();
+
+    // Only block UI if NO cached data at all
+    const loading = (!allWeatherData && weatherLoading) || (!allWeatherData && hierarchyLoading);
 
     // Local storage state
     const [selectedResorts, setSelectedResorts] = useLocalStorage<string[]>('selectedResorts', defaultSelectedResorts);
@@ -582,6 +585,29 @@ function App(): JSX.Element {
         sortResorts
     ]);
 
+    // Show loading state
+    if (loading) {
+        return (
+            <div className="min-h-screen p-4 sm:p-6 md:p-8 flex items-center justify-center bg-theme-background transition-colors duration-300 overflow-x-hidden">
+                <div className="text-center">
+                    <div className="text-xl font-semibold text-theme-textSecondary">{t('loading.weatherData')}</div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (error) {
+        return (
+            <div className="min-h-screen p-4 sm:p-6 md:p-8 flex items-center justify-center bg-theme-background transition-colors duration-300 overflow-x-hidden">
+                <div className="text-center">
+                    <div className="text-xl font-semibold text-red-600">{t('error.loadingWeatherData')}</div>
+                    <div className="text-sm text-theme-textSecondary mt-2">{t('error.tryRefreshing')}</div>
+                </div>
+            </div>
+        );
+    }
+
     // Home page content (resort list)
     const homeContent = (
         <>
@@ -650,13 +676,6 @@ function App(): JSX.Element {
                 </div>
             )}
 
-            {error && (
-                <div className="text-center py-12">
-                    <div className="text-xl font-semibold text-red-600">{t('error.loadingWeatherData')}</div>
-                    <div className="text-sm text-theme-textSecondary mt-2">{t('error.tryRefreshing')}</div>
-                </div>
-            )}
-
             <div className={viewMode === 'compact' ? "compact-grid" : "space-y-8"}>
                 <Suspense fallback={<div className="text-center py-4 text-theme-textSecondary">Loading...</div>}>
                     {displayResorts.map((resort, index) => (
@@ -683,13 +702,9 @@ function App(): JSX.Element {
                     </button>
                 )}
 
-                {selectedResorts.length === 0 ? (
+                {selectedResorts.length === 0 && (
                     <div className="text-center py-12">
                         <div className="text-theme-textSecondary text-lg">{t('empty.selectResorts')}</div>
-                    </div>
-                ) : displayResorts.length === 0 && !error && (
-                    <div className="text-center py-12">
-                        <div className="text-theme-textSecondary text-lg">{t('loading.weatherData')}</div>
                     </div>
                 )}
             </div>

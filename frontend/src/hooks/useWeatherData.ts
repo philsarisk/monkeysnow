@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchAllData } from '../utils/weather';
-import type { AllWeatherData, UseWeatherDataReturn } from '../types';
+import { idbGet, idbSet } from '../utils/indexedDB';
+import type { AllWeatherData, ResortData, UseWeatherDataReturn } from '../types';
 
 // Module-level cache for request deduplication (prevents duplicate fetches in React StrictMode)
 let cachedData: AllWeatherData | null = null;
@@ -13,14 +14,46 @@ export function useWeatherData(): UseWeatherDataReturn {
   const loadingController = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    // If we already have cached data, skip fetch
-    if (cachedData) {
-      setAllWeatherData(cachedData);
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    const loadWeatherData = async () => {
+    async function init() {
+      // If we already have module-level cached data, use it
+      if (cachedData) {
+        setAllWeatherData(cachedData);
+        setLoading(false);
+        return;
+      }
+
+      // Try to restore from IndexedDB for instant display while fetch happens
+      try {
+        const raw = localStorage.getItem('selectedResorts');
+        if (raw) {
+          const selectedResorts: string[] = JSON.parse(raw);
+          if (selectedResorts.length > 0) {
+            const cachedUpdatedAt = await idbGet<string>('meta:updatedAt');
+            const data: Record<string, ResortData> = {};
+
+            await Promise.all(
+              selectedResorts.map(async (name) => {
+                try {
+                  const entry = await idbGet<ResortData>(`resort:${name}`);
+                  if (entry) data[name] = entry;
+                } catch {
+                  // Individual read failed — skip
+                }
+              })
+            );
+
+            if (!cancelled && Object.keys(data).length > 0) {
+              setAllWeatherData({ updatedAt: cachedUpdatedAt || '', data });
+            }
+          }
+        }
+      } catch {
+        // IndexedDB unavailable — continue to network fetch
+      }
+
+      // Always fetch fresh data
       try {
         setLoading(true);
         setError(null);
@@ -33,25 +66,45 @@ export function useWeatherData(): UseWeatherDataReturn {
         const data = await pendingRequest;
         cachedData = data;
         pendingRequest = null;
-        setAllWeatherData(data);
+
+        if (!cancelled) {
+          setAllWeatherData(data);
+        }
+
+        // Write to IndexedDB in background (non-blocking)
+        (async () => {
+          try {
+            await idbSet('meta:updatedAt', data.updatedAt);
+            await Promise.all(
+              Object.entries(data.data).map(([name, resortData]) =>
+                idbSet(`resort:${name}`, resortData)
+              )
+            );
+          } catch {
+            // IndexedDB unavailable — silently ignore
+          }
+        })();
       } catch (err) {
         pendingRequest = null;
-        console.error('Failed to fetch weather data:', err);
-        setError(err instanceof Error ? err : new Error('Unknown error'));
+        if (!cancelled) {
+          console.error('Failed to fetch weather data:', err);
+          setError(err instanceof Error ? err : new Error('Unknown error'));
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    };
+    }
 
-    loadWeatherData();
+    init();
+    return () => { cancelled = true; };
   }, []);
 
   const createLoadingController = useCallback((): AbortController => {
-    // Cancel any existing loading
     if (loadingController.current) {
       loadingController.current.abort();
     }
-    // Create new loading controller
     loadingController.current = new AbortController();
     return loadingController.current;
   }, []);
@@ -67,6 +120,6 @@ export function useWeatherData(): UseWeatherDataReturn {
     loading,
     error,
     createLoadingController,
-    cancelLoading
+    cancelLoading,
   };
 }

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 
 export interface UseHideBordersReturn {
@@ -12,7 +12,7 @@ export function useHideBorders(): UseHideBordersReturn {
 
   // Apply no-borders class to document when state changes
   // Note: isHideBordersEnabled=true means borders are hidden (no-borders class applied)
-  useLayoutEffect(() => {
+  useEffect(() => {
     const root = document.documentElement;
     if (isHideBordersEnabled) {
       root.classList.add('no-borders');
