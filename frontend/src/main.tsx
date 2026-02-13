@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { HierarchyProvider } from './contexts/HierarchyContext'
-import { deleteOldIndexedDB } from './utils/compressedStorage'
 import './style.css'
 
 // Main app wrapper
@@ -50,9 +49,8 @@ const migrateResortIds = () => {
     }
 };
 
-// Run migrations before rendering
+// Run migration before rendering
 migrateResortIds();
-deleteOldIndexedDB();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

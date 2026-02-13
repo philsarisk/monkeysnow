@@ -1273,20 +1273,18 @@ input[type="checkbox"] {
     font-weight: 600;
 }
 
-.resort-grid-footer-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;
-}
-
 .resort-selection-count {
+    margin-left: auto;
     padding: 2px 8px;
     background: var(--accent, #0a84ff);
     border-radius: 10px;
     color: #ffffff;
     font-size: 11px;
     font-weight: 600;
+}
+
+.resort-grid-clear-btn + .resort-selection-count {
+    margin-left: 8px;
 }
 
 /* Rainbow mode for resort selection */
@@ -1352,13 +1350,14 @@ input[type="checkbox"] {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 32px;
-    padding: 0 12px;
+    height: 24px;
+    padding: 0 10px;
+    margin-left: auto;
     background: transparent;
     border: none;
     border-radius: 6px;
     color: var(--textSecondary, #a1a1a6);
-    font-size: 13px;
+    font-size: 11px;
     font-family: inherit;
     cursor: pointer;
     transition: all 0.15s ease;

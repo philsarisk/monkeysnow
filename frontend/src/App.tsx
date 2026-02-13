@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Header } from './components/Header';
 import { UtilityBar } from './components/UtilityBar';
@@ -30,6 +30,7 @@ import { useHideBorders } from './hooks/useHideBorders';
 import { useShowDate } from './hooks/useShowDate';
 import { useResortHierarchy } from './hooks/useResortHierarchy';
 import { useUnitSystem } from './hooks/useUnitSystem';
+import { useIsMobile } from './hooks/useIsMobile';
 import { useLanguage } from './hooks/useLanguage';
 import { useHierarchy } from './contexts/HierarchyContext';
 import { processResortData } from './utils/weather';
@@ -120,12 +121,16 @@ function App(): JSX.Element {
     const { isHideBordersEnabled, setHideBordersEnabled } = useHideBorders();
     const { isShowDateEnabled, setShowDateEnabled } = useShowDate();
     const { t, language, setLanguage, availableLanguages } = useLanguage();
+    const isMobile = useIsMobile();
 
     // Hierarchy data from backend (resort list, display names)
     const { skiResorts, getDisplayName, loading: hierarchyLoading } = useHierarchy();
 
     // Weather data hook
-    const { allWeatherData, error, createLoadingController, cancelLoading } = useWeatherData();
+    const { allWeatherData, loading: weatherLoading, error, fetchResorts, createLoadingController, cancelLoading } = useWeatherData();
+
+    // Only block UI if NO cached data at all
+    const loading = (!allWeatherData && weatherLoading) || (!allWeatherData && hierarchyLoading);
 
     // Local storage state
     const [selectedResorts, setSelectedResorts] = useLocalStorage<string[]>('selectedResorts', defaultSelectedResorts);
@@ -161,6 +166,14 @@ function App(): JSX.Element {
         }
     }, [hierarchyLoading, skiResorts, hasInitialized, setSelectedResorts, setHasInitialized]);
 
+    // Initial page load fetch — fetch selected resorts once on mount
+    const initialFetchDone = useRef(false);
+    useEffect(() => {
+        if (!initialFetchDone.current && selectedResorts.length > 0) {
+            initialFetchDone.current = true;
+            fetchResorts(selectedResorts);
+        }
+    }, [selectedResorts, fetchResorts]);
 
     // Banner dismissal state
     const [bannerDismissed, setBannerDismissed] = useLocalStorage<boolean>('bannerDismissed', false);
@@ -171,6 +184,14 @@ function App(): JSX.Element {
         onResortsChange: setSelectedResorts,
     });
 
+    // Fetch fresh weather data when resort selection modal closes
+    const prevModalOpen = useRef(false);
+    useEffect(() => {
+        if (prevModalOpen.current && !resortHierarchy.isOpen) {
+            fetchResorts(selectedResorts);
+        }
+        prevModalOpen.current = resortHierarchy.isOpen;
+    }, [resortHierarchy.isOpen, selectedResorts, fetchResorts]);
 
     // Open resort modal and auto-dismiss the banner
     const openResortModalAndDismissBanner = useCallback(() => {
@@ -551,6 +572,7 @@ function App(): JSX.Element {
     }, [navigate]);
 
     // Get sorted resort data for display
+    const MOBILE_RESORT_LIMIT = 100;
     const displayResorts = useMemo((): ProcessedResortData[] => {
         if (!allWeatherData || selectedResorts.length === 0) return [];
 
@@ -565,9 +587,14 @@ function App(): JSX.Element {
             unitSystem
         );
 
-        return sortedResorts
+        const processed = sortedResorts
             .map(resortId => resortData.get(resortId))
             .filter((resort): resort is ProcessedResortData => Boolean(resort));
+
+        if (isMobile && processed.length > MOBILE_RESORT_LIMIT) {
+            return processed.slice(0, MOBILE_RESORT_LIMIT);
+        }
+        return processed;
     }, [
         allWeatherData,
         selectedResorts,
@@ -579,8 +606,34 @@ function App(): JSX.Element {
         snowfallEstimateMode,
         unitSystem,
         resortData,
-        sortResorts
+        sortResorts,
+        isMobile
     ]);
+
+    const isTruncated = isMobile && selectedResorts.length > MOBILE_RESORT_LIMIT;
+
+    // Show loading state
+    if (loading) {
+        return (
+            <div className="min-h-screen p-4 sm:p-6 md:p-8 flex items-center justify-center bg-theme-background transition-colors duration-300 overflow-x-hidden">
+                <div className="text-center">
+                    <div className="text-xl font-semibold text-theme-textSecondary">{t('loading.weatherData')}</div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (error) {
+        return (
+            <div className="min-h-screen p-4 sm:p-6 md:p-8 flex items-center justify-center bg-theme-background transition-colors duration-300 overflow-x-hidden">
+                <div className="text-center">
+                    <div className="text-xl font-semibold text-red-600">{t('error.loadingWeatherData')}</div>
+                    <div className="text-sm text-theme-textSecondary mt-2">{t('error.tryRefreshing')}</div>
+                </div>
+            </div>
+        );
+    }
 
     // Home page content (resort list)
     const homeContent = (
@@ -650,13 +703,6 @@ function App(): JSX.Element {
                 </div>
             )}
 
-            {error && (
-                <div className="text-center py-12">
-                    <div className="text-xl font-semibold text-red-600">{t('error.loadingWeatherData')}</div>
-                    <div className="text-sm text-theme-textSecondary mt-2">{t('error.tryRefreshing')}</div>
-                </div>
-            )}
-
             <div className={viewMode === 'compact' ? "compact-grid" : "space-y-8"}>
                 <Suspense fallback={<div className="text-center py-4 text-theme-textSecondary">Loading...</div>}>
                     {displayResorts.map((resort, index) => (
@@ -672,6 +718,12 @@ function App(): JSX.Element {
                     ))}
                 </Suspense>
 
+                {isTruncated && (
+                    <div className="text-center py-3 text-sm text-theme-textSecondary">
+                        Showing {MOBILE_RESORT_LIMIT} of {selectedResorts.length} selected resorts on mobile
+                    </div>
+                )}
+
                 {/* Ghost "Add more resorts" card */}
                 {selectedResorts.length > 0 && (
                     <button
@@ -683,13 +735,9 @@ function App(): JSX.Element {
                     </button>
                 )}
 
-                {selectedResorts.length === 0 ? (
+                {selectedResorts.length === 0 && (
                     <div className="text-center py-12">
                         <div className="text-theme-textSecondary text-lg">{t('empty.selectResorts')}</div>
-                    </div>
-                ) : displayResorts.length === 0 && !error && (
-                    <div className="text-center py-12">
-                        <div className="text-theme-textSecondary text-lg">{t('loading.weatherData')}</div>
                     </div>
                 )}
             </div>
